@@ -17,112 +17,23 @@ exit
 fi
 
 # Install packages
-apt install -y argon2 pwgen postfix postfix-pgsql dovecot-imapd dovecot-pgsql dovecot-lmtpd dovecot-sieve dovecot-managesieved rspamd postgresql apache2 phppgadmin python3-certbot-apache php-curl php-dom php-json php-mail php-xml php-date
+apt install -y argon2 pwgen postfix postfix-pgsql dovecot-imapd dovecot-pgsql dovecot-lmtpd dovecot-sieve dovecot-managesieved rspamd postgresql
 
 # Stop all unconfigured services
-service apache2 stop; service postfix stop; service dovecot stop; service postgresql stop
-
-# Delete all default sites from Apache
-for i in /etc/apache2/sites-enabled/*; do a2dissite `basename $i`; done
-rm -f /etc/apache2/sites-available/000-default.conf
-rm -f /etc/apache2/sites-available/default-ssl.conf
-
-# Disable phpPgAdmin configuration
-a2disconf phppgadmin
-
-# vhost for phpPgAdmin
-rm -f /etc/apache2/sites-available/lanhost.conf
-
-echo "<VirtualHost $mylocalip:80>" >> /etc/apache2/sites-available/lanhost.conf
-echo "    Include /etc/apache2/conf-available/phppgadmin.conf" >> /etc/apache2/sites-available/lanhost.conf
-echo "    DocumentRoot /var/www/lanhost" >> /etc/apache2/sites-available/lanhost.conf
-echo "    ErrorLog \${APACHE_LOG_DIR}/lanhost.error.log" >> /etc/apache2/sites-available/lanhost.conf
-echo "</VirtualHost>" >> /etc/apache2/sites-available/lanhost.conf
-
-mkdir -m 640 /var/www/lanhost && chown www-data:www-data -R /var/www/lanhost
-
-# phpPgAdmin access
-mysearch="Require local"
-myreplace="Require all granted"
-sed -i "s/$mysearch/$myreplace/gi" /etc/apache2/conf-available/phppgadmin.conf
-
-# public vhost
-rm -f /etc/apache2/sites-available/webmail.conf
-
-echo "<VirtualHost *:443>" >> /etc/apache2/sites-available/webmail.conf
-echo "    ServerName $myhostname.$mydomain" >> /etc/apache2/sites-available/webmail.conf
-echo "    DocumentRoot /var/www/webmail" >> /etc/apache2/sites-available/webmail.conf
-echo "    <Directory \"/var/www/webmail\">" >> /etc/apache2/sites-available/webmail.conf
-echo "        Options +FollowSymLinks -Indexes" >> /etc/apache2/sites-available/webmail.conf
-echo "        AllowOverride All" >> /etc/apache2/sites-available/webmail.conf
-echo "    </Directory>" >> /etc/apache2/sites-available/webmail.conf
-echo "    <Directory \"/var/www/webmail/data/\">" >> /etc/apache2/sites-available/webmail.conf
-echo "        Require all denied" >> /etc/apache2/sites-available/webmail.conf
-echo "    </Directory>" >> /etc/apache2/sites-available/webmail.conf
-echo "    SSLEngine on" >> /etc/apache2/sites-available/webmail.conf
-echo "    SSLCertificateFile /etc/letsencrypt/live/$myhostname.$mydomain/fullchain.pem" >> /etc/apache2/sites-available/webmail.conf
-echo "    SSLCertificateKeyFile /etc/letsencrypt/live/$myhostname.$mydomain/privkey.pem" >> /etc/apache2/sites-available/webmail.conf
-echo "    Protocols h2 http/1.1" >> /etc/apache2/sites-available/webmail.conf
-echo "    Header always set Strict-Transport-Security \"max-age=63072000\"" >> /etc/apache2/sites-available/webmail.conf
-echo "    ErrorLog  \${APACHE_LOG_DIR}/webmail.port443.error.log" >> /etc/apache2/sites-available/webmail.conf
-echo "</VirtualHost>" >> /etc/apache2/sites-available/webmail.conf
-
-mkdir -m 640 /var/www/webmail && chown www-data:www-data -R /var/www/webmail
-
-# HTTP to HTTPs redirect
-rm -f /etc/apache2/sites-available/ssl-redirect.conf
-
-echo "<VirtualHost *:80>" >> /etc/apache2/sites-available/ssl-redirect.conf
-echo "    ServerName $myhostname.$mydomain" >> /etc/apache2/sites-available/ssl-redirect.conf
-echo "    RewriteEngine On" >> /etc/apache2/sites-available/ssl-redirect.conf
-echo "    RewriteCond %{HTTPS} off" >> /etc/apache2/sites-available/ssl-redirect.conf
-echo "    RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI} [R=301]" >> /etc/apache2/sites-available/ssl-redirect.conf
-echo "    ErrorLog \${APACHE_LOG_DIR}/ssl-redirect.error.log" >> /etc/apache2/sites-available/ssl-redirect.conf
-echo "</VirtualHost>" >> /etc/apache2/sites-available/ssl-redirect.conf
-
-# More Secure TLS
-rm -i /etc/apache2/conf-available/ssl-stricter-options.conf
-
-echo "SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1 -TLSv1.2" >> /etc/apache2/conf-available/ssl-stricter-options.conf
-echo "SSLHonorCipherOrder off" >> /etc/apache2/conf-available/ssl-stricter-options.conf
-echo "SSLSessionTickets off" >> /etc/apache2/conf-available/ssl-stricter-options.conf
-echo "SSLUseStapling On" >> /etc/apache2/conf-available/ssl-stricter-options.conf
-echo "SSLStaplingCache \"shmcb:logs/ssl_stapling(32768)\"" >> /etc/apache2/conf-available/ssl-stricter-options.conf
-
-a2enconf ssl-stricter-options
-
-# Disable Custom logs
-a2disconf other-vhosts-access-log
-
-# Mods
-a2enmod rewrite ssl headers
-
-# Starting Apache
-a2ensite lanhost ssl-redirect
+service postfix stop; service dovecot stop; service postgresql stop
 
 #Get SSL certificates
-#certbot certonly --apache --agree-tos --email admin@$mydomain --no-eff-email --domain $myhostname.$mydomain
+#certbot certonly --agree-tos --email admin@$mydomain --no-eff-email --domain $myhostname.$mydomain
 
 rm -f /etc/letsencrypt/renewal-hooks/deploy/reload_all_services_using_tls.sh
 
 echo "#!/bin/bash" >> /etc/letsencrypt/renewal-hooks/deploy/reload_all_services_using_tls.sh
-echo "apachectl graceful" >> /etc/letsencrypt/renewal-hooks/deploy/reload_all_services_using_tls.sh
 echo "postfix reload" >> /etc/letsencrypt/renewal-hooks/deploy/reload_all_services_using_tls.sh
 echo "dovecot reload" >> /etc/letsencrypt/renewal-hooks/deploy/reload_all_services_using_tls.sh
 
 
 ############################################
 ################ DATABASE ##################
-
-# phpPgAdmin allow login for postgres
-mysearch="extra_login_security'] = true;"
-myreplace="extra_login_security'] = false;"
-sed -i "s/$mysearch/$myreplace/gi" /etc/phppgadmin/config.inc.php
-
-# phpPgAdmin - Max chars
-mysearch="max_chars'] = 50;"
-myreplace="max_chars'] = 120;"
-sed -i "s/$mysearch/$myreplace/gi" /etc/phppgadmin/config.inc.php
 
 # Remove peer authentication
 mysearch="local   all             all                                     peer"
